@@ -1,6 +1,21 @@
 version: '3.9'
 
 services:
+  kong-migration:
+    image: 'kong/kong-gateway:${KONG_VERSION:-3.5.0.1}'
+    container_name: kong_admin
+    hostname: kong_admin
+    command: "kong migrations bootstrap"
+    networks:
+      - kong-net
+    restart: on-failure
+    environment:
+      KONG_PG_HOST: kong-database
+      KONG_PG_PASSWORD: kong
+    depends_on:
+      postgress:
+        condition: service_healthy
+        restart: true
   kong:
     image: 'kong/kong-gateway:${KONG_VERSION:-3.5.0.1}'
     container_name: kong
@@ -8,14 +23,13 @@ services:
     environment:
       KONG_PG_HOST: 'kong-database'
       KONG_PG_USER: 'kong'
-      KONG_PG_DATABASE: 'kong'
       KONG_PG_PASSWORD: 'kong'
       KONG_PROXY_ACCESS_LOG: '/dev/stdout'
       KONG_ADMIN_ACCESS_LOG: '/dev/stdout'
       KONG_PROXY_ERROR_LOG: '/dev/stderr'
       KONG_ADMIN_ERROR_LOG: '/dev/stderr'
+      KONG_ADMIN_GUI_URL: "http://localhost:8002"
       KONG_ADMIN_LISTEN: '0.0.0.0:8001, 0.0.0.0:8444 ssl'
-    # command: kong migrations up
     networks:
       - kong-net
     ports:
@@ -23,8 +37,19 @@ services:
       - "${KONG_GW_ENTRY_SSL:-8443}:8443"
       - "${KONG_GW_API:-8001}:8001"
       - "${KONG_GW_API_SSL:-8444}:8444"
+      - "${KONG_GW_MANSGER:-8002}:8002"
     depends_on:
-      - postgress
+      kong-migration:
+        condition: service_started
+      postgress:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://127.0.0.1:8001" ]
+      interval: 5s
+      timeout: 2s
+      retries: 15
+
   postgress:
     image: 'postgres:${POSTGRES_VERSION:-15.5}'
     container_name: 'kong-database'
@@ -35,18 +60,17 @@ services:
       POSTGRES_PASSWORD: 'kong'
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - "pg_data:/var/lib/postgresql/data"
     networks:
       - kong-net
-  konga:
-    image: 'pantsel/konga'
-    container_name: konga
-    hostname: konga
-    networks:
-      - kong-net
-    ports:
-      - "${KONGA_PORT:-1337}:1337"
-    environment:
-      NODE_ENV: '${KONGA_ENV:-production}'
-      TOKEN_SECRET: '${KONGA_TOKEN_SECRET}'
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "kong" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 networks:
   kong-net:
+volumes:
+  pg_data:
