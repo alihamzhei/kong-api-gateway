@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   kong:
-    image: 'kong/kong-gateway:3.5.0.1'
+    image: 'kong/kong-gateway:${KONG_VERSION:-3.5.0.1}'
     container_name: kong
     hostname: kong
     environment:
@@ -19,15 +19,14 @@ services:
     networks:
       - kong-net
     ports:
-      - "8000:8000"
-      - "8443:8443"
-      - "8001:8001"
-      - "8444:8444"
+      - "${KONG_GW_ENTRY:-8000}:8000"
+      - "${KONG_GW_ENTRY_SSL:-8443}:8443"
+      - "${KONG_GW_API:-8001}:8001"
+      - "${KONG_GW_API_SSL:-8444}:8444"
     depends_on:
       - postgress
-
   postgress:
-    image: 'postgres:15.5'
+    image: 'postgres:${POSTGRES_VERSION:-15.5}'
     container_name: 'kong-database'
     hostname: 'kong-database'
     environment:
@@ -35,7 +34,7 @@ services:
       POSTGRES_DB: 'kong'
       POSTGRES_PASSWORD: 'kong'
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     networks:
       - kong-net
   konga:
@@ -45,9 +44,9 @@ services:
     networks:
       - kong-net
     ports:
-      - "1337:1337"
+      - "${KONGA_PORT:-1337}:1337"
     environment:
-      NODE_ENV: 'production'
-      TOKEN_SECRET: '345w3erfesrw34r5qwerfwerw'
+      NODE_ENV: '${KONGA_ENV:-production}'
+      TOKEN_SECRET: '${KONGA_TOKEN_SECRET}'
 networks:
   kong-net:
